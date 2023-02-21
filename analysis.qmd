@@ -7,3 +7,40 @@ highlight-style: pygments
 format:
   html
 ---
+
+```{r}
+library(tidyverse, warn.conflicts = FALSE)
+```
+
+```{r}
+movies <- read.csv("movies.csv")
+bechdel <- read.csv("raw_bechdel.csv")
+```
+
+```{r}
+glimpse(movies)
+```
+
+```{r}
+bechdel
+```
+
+# join and clean
+
+```{r warning=FALSE}
+data <- movies |>
+  left_join(bechdel, by = "title") |>
+  filter(year.x == year.y) |>
+  rename("year" = `year.x`) |>
+  subset(select = -c(year.y, imdb_id.y, imdb_id.x, error, poster, type, imdb,
+                  code, period_code, decade_code, released, response, runtime))
+```
+
+```{r}
+data
+```
+
+general frequency trends
+imdb score
+plot keywords
+genre
