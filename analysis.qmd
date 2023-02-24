@@ -8,62 +8,72 @@ format:
   html
 ---
 
+# Import
+
 ```{r}
+#| warning: false
 library(dplyr)
-library(tidyverse, warn.conflicts = FALSE)
+library(tidyverse)
+library(tibble)
 ```
 
 ```{r}
 movies <- read.csv("movies.csv")
 ```
 
+# Clean
+
 ```{r}
-#glimpse(movies)
-```
-
-# clean
-
-```{r warning=FALSE}
+#| warning: false
 movies <- movies |>
-  subset(select = -c(imdb_id, error, poster, type, imdb, imdb_votes,
-                  code, period_code, decade_code, released, response, runtime))
+  subset(select = -c(imdb_id, error, poster, type, imdb, imdb_votes, code, period_code, decade_code, released, response, runtime, awards, actors, writer, director))
 ```
 
 ```{r}
-#movies
+glimpse(movies)
 ```
-We can convert the variables into factor
 
-Furthermore, we can also extract the most 
 The `clean_test` variable gives us the reasons why a certain movie failed the Bechdel Test. We can use the `count()` function to extract all possible values.
 
 ```{r}
 movies |>
   count(clean_test)
 ```
-Here, `nowomen` includes movies that had no women in them (rating 0), `notalk` includes movies that had women in them, but they did not talk to each other (rating 1), and `men` includes movies that had women that talked to each other, but only about men (rating 2). The tag `dubious` is given to those movies that have caused some skepticism about whether they pass the test, but have ultimately received the FAIL label.
+Here, `nowomen` includes movies that had no women in them (rating 0), `notalk` includes movies that had women in them, but they did not talk to each other (rating 1), and `men` includes movies that had women that talked to each other, but only about men (rating 2). The tag `dubious` is given to those movies that caused some skepticism about whether or not they pass the test, but ultimately received the FAIL label. In contrast, `ok` denotes movies that passed the Bechdel Test.
+
+We can check the accuracy of those designations by cross-referencing them with the columns `binary`, which reduces the classification to PASS/FAIL according to the Bechdel Test conditions.
 
 ```{r}
 movies |>
   group_by(clean_test) |>
   count(binary)
 ```
-
-
-We can check the accuracy of those designations by cross-referencing them with the columns `binary`, which reduces the classification to PASS/FAIL according to the Bechdel Test conditions.
-
-
-
-In contrast, `ok` denotes movies that passed the Bechdel Test without a doubt, and `dubious` refers to movies that also passed the test, albeit some raters might have been skeptical about it. We can confirm these 
+While the labels certainly help us understand the reasons behind each failure, they are not the easiest data to work with. The `mutate` function can help us convert the labels into numerical values within [0,3], according to the Bechdel rule. Since `dubious` does not fall into a specific category, we convert it into an additional `-1` rating level. We then store those values into a new column named `rating`.
 
 ```{r}
-movies |>
-  filter(clean_test %in% c("ok")) |>
-  count(binary)
+rating <- c(0)
+movies <- movies |>
+  add_column(rating, .before = 4) |>
+  mutate(rating = case_when(
+    clean_test == "dubious" ~ -1,
+    clean_test == "nowomen" ~ 0,
+    clean_test == "notalk" ~ 1,
+    clean_test == "men" ~ 2,
+    clean_test == "ok" ~ 3)
+  )
 ```
 
+```{r}
+glimpse(movies)
+```
+
+For an added layer of organization, we can also categorize the ratings as different levels with the `factor` function.
 
 
+
+Now that we have a clean dataset with
+
+use aggregate to calculate mean per year
 # general frequency trends
 # distribution by release year
 
