@@ -8,7 +8,7 @@ format:
   html
 ---
 
-# Import
+# Imports
 
 ```{r}
 #| warning: false
@@ -21,17 +21,30 @@ library(tibble)
 movies <- read.csv("movies.csv")
 ```
 
-# Clean
+# Data Cleaning
+
+We start the process by cleaning our dataset so that our analysis can flow more easily, without unnecessary variables getting in the way. Some columns such as `imdb_id`, `code`, `period_code`, and `decade_code` store more organizational variables that won't necessarily be important when we look at relationships between more relevant variables. Other columns simply contain too much unique data. `actors`, for instance, includes names of all starring actors in a single cell. We can filter some of these columns out with the `subset()` function.
 
 ```{r}
 #| warning: false
 movies <- movies |>
-  subset(select = -c(imdb_id, error, poster, type, imdb, imdb_votes, code, period_code, decade_code, released, response, runtime, awards, actors, writer, director))
+  subset(select = -c(imdb_id, error, poster, type, awards,
+                     imdb_votes, code, period_code, imdb,
+                     released, response, runtime, decade_code,
+                     actors, writer, director))
 ```
 
 ```{r}
 glimpse(movies)
 ```
+Additionally, some columns have many `N/A` values that might complicate our analysis later. We can get rid of those as well using `drop_na()`.
+
+```{r}
+movies <- movies |>
+  drop_na()
+```
+
+# Bechdel Ratings
 
 The `clean_test` variable gives us the reasons why a certain movie failed the Bechdel Test. We can use the `count()` function to extract all possible values.
 
@@ -39,27 +52,26 @@ The `clean_test` variable gives us the reasons why a certain movie failed the Be
 movies |>
   count(clean_test)
 ```
-Here, `nowomen` includes movies that had no women in them (rating 0), `notalk` includes movies that had women in them, but they did not talk to each other (rating 1), and `men` includes movies that had women that talked to each other, but only about men (rating 2). The tag `dubious` is given to those movies that caused some skepticism about whether or not they pass the test, but ultimately received the FAIL label. In contrast, `ok` denotes movies that passed the Bechdel Test.
+Here, `nowomen` includes movies that had no women in them (rating 0), `notalk` includes movies that had women in them, but they did not talk to each other (rating 1), and `men` includes movies that had women that talked to each other, but only about men (rating 2). The tag `dubious` is given to those movies that caused some skepticism about whether or not they pass the test, but ultimately received the `FAIL` label. In contrast, `ok` denotes movies that met all three conditions and thus passed the Bechdel Test.
 
-We can check the accuracy of those designations by cross-referencing them with the columns `binary`, which reduces the classification to PASS/FAIL according to the Bechdel Test conditions.
+We can check the accuracy of those designations by cross-referencing them with the columns `binary`, which reduces the classification to `PASS/FAIL` according to the Bechdel Test conditions.
 
 ```{r}
 movies |>
   group_by(clean_test) |>
   count(binary)
 ```
-While the labels certainly help us understand the reasons behind each failure, they are not the easiest data to work with. The `mutate` function can help us convert the labels into numerical values within [0,3], according to the Bechdel rule. Since `dubious` does not fall into a specific category, we convert it into an additional `-1` rating level. We then store those values into a new column named `rating`.
+While the labels certainly help us understand the reasons behind each failure, they are not the easiest data to work with. The `mutate` function can help us convert the labels into numerical values within [0,3], according to the Bechdel rule. Since `dubious` does not fall into a specific category, we will convert it into an additional `-1` rating level for the time being These values are then stored into a new column named `rating`.
 
 ```{r}
-rating <- c(0)
+movies['rating'] <- 0
 movies <- movies |>
-  add_column(rating, .before = 4) |>
   mutate(rating = case_when(
-    clean_test == "dubious" ~ -1,
-    clean_test == "nowomen" ~ 0,
-    clean_test == "notalk" ~ 1,
-    clean_test == "men" ~ 2,
-    clean_test == "ok" ~ 3)
+    clean_test == 'dubious' ~ -1,
+    clean_test == 'nowomen' ~ 0,
+    clean_test == 'notalk' ~ 1,
+    clean_test == 'men' ~ 2,
+    clean_test == 'ok' ~ 3)
   )
 ```
 
@@ -67,28 +79,73 @@ movies <- movies |>
 glimpse(movies)
 ```
 
-For an added layer of organization, we can also categorize the ratings as different levels with the `factor` function.
+For an added layer of organization, we can also categorize the ratings as different levels with the `as.factor()` function.
 
+```{r}
+movies['rating_fac'] <- as.factor(movies$rating)
+movies$rating_fac
+```
 
+# Analysis & Visualization
 
-Now that we have a clean dataset with
+Now that we have a clean dataset with only relevant columns, we can analyze general trends of the Bechdel test in relation to other variables. At this point, we can already generate some interesting plots.
 
-use aggregate to calculate mean per year
-# general frequency trends
-# distribution by release year
+## Yearly Trends
+
+The next code chunk creates a line graph that shows how the mean rating for the Bechdel test changed over the analyzed years. This is one of the many relationships that can be explored in the data.
 
 ```{r}
 movies |>
   group_by(year) |>
-  count() |>
-  ggplot() + geom_line(aes(year, n, group = 1))
+  mutate(avg = mean(rating, na.rm = TRUE)) |>
+  ungroup() |>
+  ggplot() + geom_line(aes(year, avg))
 ```
+
+Furthermore, since we will be often looking at the different rating levels, it might be helpful to create separate sub-dataframes for each of them. We will leave the `dubious` label out of our analysis, since it is not entirely defined.
+
+```{r}
+filter(movies, rating_fac == 0) -> bechdel_0
+filter(movies, rating_fac == 1) -> bechdel_1
+filter(movies, rating_fac == 2) -> bechdel_2
+filter(movies, rating_fac == 3) -> bechdel_3
+```
+
+
+## International Gross 
+
+For instance, we can explore possible correlations between a movie's international gross, normalized to 2013, and its result on the Bechdel test. In order to do so, one option would be to calculate the mean gross for each level of rating. Note that the international gross normalized to 2013 is represented by the variable `intgross_2013`.
+
+We first create a new dataset to store the ratings, as well as their respective gross mean values. Since the variable is not numeric in the original dataframe, we can convert it using `as.integer()`.
+
+```{r}
+#| warning: false
+intgross_means <- data.frame(rating = c(0, 1, 2, 3),
+                             mean = c(mean(as.integer(bechdel_0$intgross_2013), na.rm = TRUE),
+                                      mean(as.integer(bechdel_1$intgross_2013), na.rm = TRUE),
+                                      mean(as.integer(bechdel_2$intgross_2013), na.rm = TRUE),
+                                      mean(as.integer(bechdel_3$intgross_2013), na.rm = TRUE))
+                            )
+```
+
+We can plot the values in a simple bar chart with `ggplot`. The plot reveals that movies with at least two women in them who do not talk to each other had the highest mean international gross value, receiving a rating of 1, followed by those that had no women characters, meaning they failed the Bechdel test.
+
+```{r}
+intgross_means |>
+  ggplot(aes(x = rating, y = mean)) +
+    geom_bar(stat = "identity") +
+    coord_flip()
+```
+
 
 ```{r}
 library(lattice)
 library(udpipe)
 ```
 
+## Keywords
+
+This next section utilizes the UDPipe package, an open-source tool for Natural Language Processing, including tokenization, raw text parsing, and tagging.
 
 ```{r}
 udmodel <- udpipe_load_model(file = 'english-ewt-ud-2.5-191206.udpipe')
