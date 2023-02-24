@@ -1,4 +1,5 @@
 .Rproj.user/
 *.Rproj
 *.md
-analysis_files/figure_html/*
+analysis_files/
+analysis.html
