@@ -141,6 +141,7 @@ intgross |>
 Another way we could look at the relationship between the two variables is to look at the frequency of ratings for highest-grossing movies. A subset of size `n = 80` was chosen arbitrarily for this step. First, we use `order()` to sort the data in a descending order based on the `intgross_2013` variable.
 
 ```{r}
+#| warning: false
 movies <- movies[order(as.integer(movies$intgross_2013), decreasing = TRUE),]
 ```
 Then, we extract the first 80 columns, or the 80 highest-grossing movies, with the help of the `head()` function. We can plot the frequencies of each Bechdel rating using `geom_histogram()`. Here, we observe that most of the highest-grossing movies in the dataset had a rating of 1 (women who don't talk), followed by 3 (passed the test).
@@ -154,13 +155,13 @@ movies |>
 
 ## Genre
 
-A further example of a relationship that can be analyzed is that between the genre of a movie and its `PASS/FAIL` Bechdel designation. When trying to extract the values for genre, we run into a problem. Some movies fall into multiple genre categories and have therefore more than a single one listed. There are multiple ways to approach this. The easiest option would be to only look at the first value. However, the genres are listed in alphabetical order, with no actual levels of "importance." Thus, ignoring the rest would not be representative of all genres. In this case, the `str_split()` function can come in handy.
+A further example of a relationship that can be analyzed is that between the genre of a movie and its `PASS/FAIL` Bechdel designation. When trying to extract the values for genre, we run into a problem. Some movies fall into multiple genre categories and have therefore more than a single one listed. There are multiple ways to approach this. The easiest option would be to only look at the first value. However, the genres are listed in alphabetical order, with no actual levels of "importance." Thus, ignoring the rest would not be representative of all genres. In this case, `str_split_i()` can come in handy.
 
 ```{r}
 ?str_split
 ```
 
-The name in the `genre` column are separated by a simple comma (,), which could serves as our `pattern` parameter.
+The function allows us to split a string into pieces. The names in the `genre` column are separated by a simple comma (,), which could serve as our `pattern` parameter. We can split the `genre` string into 3 values, since 3 is the maximum number of genres listed, and instead add them to separate columns `genre_1`, `genre_2`, and `genre_3`.
 
 ```{r}
 movies['genre_1'] <- 'NA'
@@ -168,21 +169,78 @@ movies['genre_2'] <- 'NA'
 movies['genre_3'] <- 'NA'
 
 for(i in 1:nrow(movies)) {
-  str_split(movies[i, "genre"], ",")
+  movies[i, 'genre_1'] <- str_split_i(movies[i, "genre"], ", ", 1)
+  movies[i, 'genre_2'] <- str_split_i(movies[i, "genre"], ", ", 2)
+  movies[i, 'genre_3'] <- str_split_i(movies[i, "genre"], ", ", 3)
 }
+```
+
+```{r}
+glimpse(movies)
+```
+
+At this point, we have all listed genres separately, in different columns. Still, it would be more helpful for the purpose of our analysis to put those values in a single column, i.e. make the dataframe "longer". We can easily achieve this with `pivot_longer`.
+
+```{r}
+movies <- movies |>
+  pivot_longer(cols = c('genre_1', 'genre_2', 'genre_3'),
+               names_to = 'genre_labels',
+               values_to = 'genres')
+
+glimpse(movies)
+```
+Notice that some rows still contain `NA` values, since not all movies have three different genres. Again, we can ignore those values. Likewise, we won't be needing our `genre_labels` column, so we can filter that out as well.
+
+```{r}
+movies <- movies |>
+  drop_na() |>
+  subset(select = -c(genre_labels))
+  
+glimpse(movies)
+```
+
+```{r}
+movies |>
+  group_by(genres) |>
+  count(binary)
 ```
 
 
 
-## Keywords with NLP
+## Joining Datasets
+
+As we have seen before with the existence of a `dubious` variable, the Bechdel test is not always a consensus between viewers. That is because they might have different notions of what it means for a movie to have a woman with a significant enough role to be factored into the test, or there might be nuances to a conversation between women that viewers may or may not classify as "about a a man." In order to explore this variation even further, we will import `raw_bechdel.csv`, a different dataset that includes some information about movies from 1970 to 2020. 
+
+```{r}
+raw_bechdel <- read.csv("raw_bechdel.csv")
+```
+
+For the sake of simplicity, we will assume that rows where the `title` and `year` variables are the same in both dataframes refer to the same movie. We can join both dataframes by `title` with `left_join()`, then select the duplicates that have the same `year`.
+
+```{r}
+#| warning: false
+joined <- movies |>
+  left_join(raw_bechdel, by = "title") |>
+  filter(year.x == year.y) |>
+  rename("year" = `year.x`)
+```
+
+Using the `sum()` function, we observe that the ratings given to overlapping movies in both datasets are the same in 3184 occasions. In contrast, they are not the same in 455 occasions, 444 of them being cases where the rating in `raw_bechdel` is greater than that in `movies`.
+
+```{r}
+sum(joined$rating.x == joined$rating.y)
+sum(joined$rating.x != joined$rating.y)
+sum(joined$rating.x > joined$rating.y)
+sum(joined$rating.x < joined$rating.y)
+```
+# Keywords (with NLP tokenization)
+
+This next section utilizes the UDPipe package, an open-source tool for Natural Language Processing, including tokenization, raw text parsing, and tagging.
 
 ```{r}
 library(lattice)
 library(udpipe)
 ```
-
-
-This next section utilizes the UDPipe package, an open-source tool for Natural Language Processing, including tokenization, raw text parsing, and tagging.
 
 ```{r}
 udmodel <- udpipe_load_model(file = 'english-ewt-ud-2.5-191206.udpipe')
@@ -238,7 +296,3 @@ stats$key <- factor(stats$keyword, levels = rev(stats$keyword))
 barchart(key ~ freq, data = head(stats, 20), col = "magenta", 
          main = "Keywords - simple noun phrases", xlab = "Frequency")
 ```
-This classification can be used 
-imdb score
-plot keywords
-genre
