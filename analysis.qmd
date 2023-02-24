@@ -102,6 +102,8 @@ movies |>
   ggplot() + geom_line(aes(year, avg))
 ```
 
+## Subsetting
+
 Furthermore, since we will be often looking at the different rating levels, it might be helpful to create separate sub-dataframes for each of them. We will leave the `dubious` label out of our analysis, since it is not entirely defined.
 
 ```{r}
@@ -114,36 +116,71 @@ filter(movies, rating_fac == 3) -> bechdel_3
 
 ## International Gross 
 
-For instance, we can explore possible correlations between a movie's international gross, normalized to 2013, and its result on the Bechdel test. In order to do so, one option would be to calculate the mean gross for each level of rating. Note that the international gross normalized to 2013 is represented by the variable `intgross_2013`.
+As an example, we can analyze possible correlations between a movie's international gross, normalized to 2013, and its result on the Bechdel test. In order to do so, one option would be to calculate the mean gross for each level of rating. Note that the international gross normalized to 2013 is represented by the variable `intgross_2013`.
 
 We first create a new dataset to store the ratings, as well as their respective gross mean values. Since the variable is not numeric in the original dataframe, we can convert it using `as.integer()`.
 
 ```{r}
 #| warning: false
-intgross_means <- data.frame(rating = c(0, 1, 2, 3),
-                             mean = c(mean(as.integer(bechdel_0$intgross_2013), na.rm = TRUE),
-                                      mean(as.integer(bechdel_1$intgross_2013), na.rm = TRUE),
-                                      mean(as.integer(bechdel_2$intgross_2013), na.rm = TRUE),
-                                      mean(as.integer(bechdel_3$intgross_2013), na.rm = TRUE))
-                            )
+intgross <- data.frame(rating = c(0, 1, 2, 3),
+                mean = c(mean(as.integer(bechdel_0$intgross_2013), na.rm = TRUE),
+                         mean(as.integer(bechdel_1$intgross_2013), na.rm = TRUE),
+                         mean(as.integer(bechdel_2$intgross_2013), na.rm = TRUE),
+                         mean(as.integer(bechdel_3$intgross_2013), na.rm = TRUE))
+                )
 ```
 
 We can plot the values in a simple bar chart with `ggplot`. The plot reveals that movies with at least two women in them who do not talk to each other had the highest mean international gross value, receiving a rating of 1, followed by those that had no women characters, meaning they failed the Bechdel test.
 
 ```{r}
-intgross_means |>
+intgross |>
   ggplot(aes(x = rating, y = mean)) +
     geom_bar(stat = "identity") +
     coord_flip()
 ```
+Another way we could look at the relationship between the two variables is to look at the frequency of ratings for highest-grossing movies. A subset of size `n = 80` was chosen arbitrarily for this step. First, we use `order()` to sort the data in a descending order based on the `intgross_2013` variable.
 
+```{r}
+movies <- movies[order(as.integer(movies$intgross_2013), decreasing = TRUE),]
+```
+Then, we extract the first 80 columns, or the 80 highest-grossing movies, with the help of the `head()` function. We can plot the frequencies of each Bechdel rating using `geom_histogram()`. Here, we observe that most of the highest-grossing movies in the dataset had a rating of 1 (women who don't talk), followed by 3 (passed the test).
+
+```{r}
+movies |>
+  head(80) |>
+  ggplot(aes(x = as.integer(rating))) +
+    geom_histogram(binwidth = 1)
+```
+
+## Genre
+
+A further example of a relationship that can be analyzed is that between the genre of a movie and its `PASS/FAIL` Bechdel designation. When trying to extract the values for genre, we run into a problem. Some movies fall into multiple genre categories and have therefore more than a single one listed. There are multiple ways to approach this. The easiest option would be to only look at the first value. However, the genres are listed in alphabetical order, with no actual levels of "importance." Thus, ignoring the rest would not be representative of all genres. In this case, the `str_split()` function can come in handy.
+
+```{r}
+?str_split
+```
+
+The name in the `genre` column are separated by a simple comma (,), which could serves as our `pattern` parameter.
+
+```{r}
+movies['genre_1'] <- 'NA'
+movies['genre_2'] <- 'NA'
+movies['genre_3'] <- 'NA'
+
+for(i in 1:nrow(movies)) {
+  str_split(movies[i, "genre"], ",")
+}
+```
+
+
+
+## Keywords with NLP
 
 ```{r}
 library(lattice)
 library(udpipe)
 ```
 
-## Keywords
 
 This next section utilizes the UDPipe package, an open-source tool for Natural Language Processing, including tokenization, raw text parsing, and tagging.
 
