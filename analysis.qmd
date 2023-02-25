@@ -1,5 +1,5 @@
 ---
-title: "The Bechdel Test: An Analysis in R"
+title: "Bechdel Test: An Analysis in R"
 subtitle: "LING 343 WN23 Project 1"
 author: "Maria Figueiredo"
 toc: true
@@ -10,21 +10,26 @@ format:
     theme: lux
 ---
 
-# Description
+# Introduction
 
-The Bechdel Test is one of the most popular ways of measuring gender bias in movies. Its main idea comes from a 1985 strip by cartoonist Alison Bechdel. As part of her "Dykes To Watch Out" series, Bechdel wrote that a movie will only pass what she calls "The Rule" if it includes at least two named women who talk to each other about something other than a man. `movies.csv` is the main dataset used for this analysis and includes general information about movies from 1970 to 2013, as well as whether or not they pass the Bechdel Test. The dataset was extracted from `https://github.com/rfordatascience/tidytuesday/tree/master/data/2021/2021-03-09`.
+The Bechdel Test is one of the most popular ways of measuring gender bias in movies. Its main idea comes from a 1985 strip by cartoonist Alison Bechdel. As part of her "Dykes To Watch Out" series, Bechdel wrote that a movie will only pass what she calls "The Rule" if it includes at least two named women who talk to each other about something other than a man. `movies.csv` is the main dataset used for this analysis and includes general information about movies from 1970 to 2013, as well as whether or not they pass the Bechdel Test. The dataset was extracted from the [Tidy Tuesday](https://github.com/rfordatascience/tidytuesday/tree/master/data/2021/2021-03-09) project.
+
+![The original cartoon by Alison Bechdel](cartoon.jpeg)
+
+NOTE: It is important to acknowledge that the Bechdel Test does not yet include a metric for bias against non-binary or gender non-confirming individuals. For the purpose of this analysis, we will be treating "men" and "women" as two binary categories, as they appear in the dataset, although the gender spectrum is a lot more complex that that.
+
+# Imports
 
 ```{r}
 movies <- read.csv("movies.csv")
 ```
-
-# Imports
 
 ```{r}
 #| warning: false
 library(dplyr)
 library(tidyverse)
 library(tibble)
+library(gridExtra)
 ```
 
 # Data Cleaning
@@ -52,15 +57,15 @@ movies <- movies |>
 
 # Bechdel Ratings
 
-The `clean_test` variable gives us the reasons why a certain movie failed the Bechdel Test. We can use the `count()` function to extract all possible values.
+The `clean_test` variable gives us the reasons why a certain movie failed the Bechdel Test. We use the `count()` function to extract all possible values.
 
 ```{r}
 movies |>
   count(clean_test)
 ```
-Here, `nowomen` includes movies that had no women in them (rating `0`), `notalk` includes movies that had women in them, but they did not talk to each other (rating `1`), and `men` includes movies that had women that talked to each other, but only about men (rating `2`). The tag `dubious` is given to those movies that caused some skepticism about whether or not they pass the Test, but ultimately received the `FAIL` label. In contrast, `ok` denotes movies that met all three conditions and thus passed the Bechdel Test.
+Here, `nowomen` includes movies that have less than two women in them (rating `0`), `notalk` includes movies that have at least two women in them, but they don't talk to each other (rating `1`), and `men` includes movies that have women that talk to each other, but only about men (rating `2`). The tag `dubious` is given to those movies that caused some skepticism about whether or not they pass the Test, but ultimately received the `FAIL` label. In contrast, `ok` denotes movies that met all three conditions and thus passed the Bechdel Test.
 
-We can check the accuracy of those designations by cross-referencing them with the columns `binary`, which reduces the classification to `PASS`/`FAIL` according to the Bechdel Test conditions.
+We can check the accuracy of those designations by cross-referencing them with the column `binary`, which reduces the classification to `PASS`/`FAIL` according to the Bechdel Test conditions.
 
 ```{r}
 movies |>
@@ -70,7 +75,7 @@ movies |>
 While the labels certainly help us understand the reasons behind each failure, they are not the easiest data to work with. The `mutate()` function can help us convert the labels into numerical values within [`0`, `3`], according to the Bechdel rule. Since `dubious` does not fall into a specific category, we will convert it into an additional `-1` rating level for the time being. These values are then stored in a new column named `rating`.
 
 ```{r}
-movies['rating'] <- 0
+movies["rating"] <- 0
 movies <- movies |>
   mutate(rating = case_when(
     clean_test == 'dubious' ~ -1,
@@ -89,36 +94,40 @@ glimpse(movies$rating)
 For an added layer of organization, we can also categorize the ratings as different levels with the `as.factor()` function.
 
 ```{r}
-movies['rating_fac'] <- as.factor(movies$rating)
-glimpse(movies$rating_fac)
+movies["level"] <- as.factor(movies$rating)
+glimpse(movies$level)
 ```
 
-# Data Analysis & Visualization
+# Analysis & Visualization
 
-Now that we have a clean dataset with only relevant columns, we can analyze general trends of the Bechdel Test as they relate to other variables. At this point, we can already generate some interesting plots.
+Now that we have a clean dataset with only relevant columns, we can analyze general trends of the Bechdel Test as they relate to specific variables. At this point, we can already generate some interesting plots.
 
 ## Yearly Trends
 
-The next code chunk creates a line graph that shows how the mean rating for the Test changed over the analyzed years. This is one of the many relationships that can be explored using the dataset.
+The next code chunk creates a bar chart that shows how the overall ratings for the Test changed over the analyzed years. This is one of the many relationships that can be explored using the information in the dataset.
 
 ```{r}
 movies |>
   group_by(year) |>
-  mutate(mean = mean(rating, na.rm = TRUE)) |>
-  ungroup() |>
-  ggplot(aes(x = year, y = mean)) +
-    geom_line()
+  ggplot(aes(x = year, fill = level)) +
+    geom_bar() +
+    scale_fill_manual(values=c("cornsilk2", "red2", "orange2", "yellow2", "green2")) +
+    labs(title = "Frequency of Ratings by Year",
+         x = "Year",
+         y = "Frequency")
 ```
 
 ## Subsetting
 
-Furthermore, since we will be often looking at the different rating levels, it might be helpful to create separate sub-dataframes for each of them. We will leave the `dubious` movies out of our analysis, since it is not entirely defined.
+Furthermore, since we will be often looking at the different rating levels, it might be helpful to create separate sub-dataframes for each of them. We will leave the `dubious` movies out of our analysis, since it is not entirely defined. Similarly, we can create separate dataframes for `PASS` and `FAIL` groups of movies.
 
 ```{r}
-filter(movies, rating_fac == 0) -> bechdel_0
-filter(movies, rating_fac == 1) -> bechdel_1
-filter(movies, rating_fac == 2) -> bechdel_2
-filter(movies, rating_fac == 3) -> bechdel_3
+bechdel_0 <- filter(movies, level == 0)
+bechdel_1 <- filter(movies, level == 1)
+bechdel_2 <- filter(movies, level == 2)
+bechdel_3 <- filter(movies, level == 3)
+bechdel_fail <- filter(movies, binary == "FAIL")
+bechdel_pass <- filter(movies, binary == "PASS")
 ```
 
 
@@ -137,15 +146,18 @@ intgross <- data.frame(rating = c(0, 1, 2, 3),
                 mean(as.integer(bechdel_3$intgross_2013), na.rm = TRUE)))
 ```
 
-We can plot the values in a simple bar chart with `ggplot`. The graph below reveals that movies with at least two named women in them who do not talk to each other, receiving a rating of `1`, had the highest mean international gross value, followed by those that had no women characters, meaning they failed the Bechdel Test.
+We can plot these values with `ggplot()`. The graph below reveals that movies with at least two named women in them who do not talk to each other, receiving a rating of `1`, had the highest mean international gross value, followed by those that had no women characters, meaning they failed the Bechdel Test.
 
 ```{r}
+#| warning: false
 intgross |>
   ggplot(aes(x = rating, y = mean)) +
-    geom_bar(stat = "identity") +
-    coord_flip()
+    geom_line(color = "orchid", size = 1.5) +
+    labs(title = "Total Mean International Gross by Rating",
+         x = "Rating",
+         y = "Mean International Gross")
 ```
-Another way we could look at the relationship between the two variables is to look at the frequency of ratings for highest-grossing movies. A subset of size `n = 80` was chosen arbitrarily for this step. First, we use `order()` to sort the data in a descending order based on the `intgross_2013` variable.
+Another way we can explore the relationship between the two variables is to look at the frequency of ratings for highest-grossing movies. A subset of size `n = 80` was chosen arbitrarily for this step. First, we use `order()` to sort the data in a descending order based on the `intgross_2013` variable.
 
 ```{r}
 #| warning: false
@@ -153,20 +165,23 @@ movies <- movies[order(as.integer(movies$intgross_2013),
                   decreasing = TRUE), ]
 ```
 
-Then, we extract the first 80 columns, or the 80 highest-grossing movies, with the help of the `head()` function. We can plot the frequencies of each Bechdel rating using ``ggplot`'s `geom_histogram()`. Here, we observe that most of the highest-grossing movies in the dataset had a rating of `1` (women who don't talk to each other), followed by `3` (passed the Test).
+Then, we extract the first 80 columns, or the 80 highest-grossing movies, with the help of the `head()` function. We can generate a density plot of each Bechdel rating using `ggplot()`'s `geom_density()`. Here, we observe that most of the highest-grossing movies in the dataset had a rating of `1` (women who don't talk to each other), followed by `3` (passed the Test).
 
 ```{r}
 movies |>
   head(80) |>
   ggplot(aes(x = as.integer(rating))) +
-    geom_histogram(binwidth = 1)
+    geom_density(fill = "navyblue", color = "blue", alpha = 0.6) +
+    labs(title = "Top 80 Movies - Density of Ratings",
+         x = "Rating",
+         y = "Density")
 ```
 
 ## Movie Genres
 
 A further example of a relationship that can be analyzed is that between the genre of a movie and its `PASS`/`FAIL` Bechdel designation. When trying to extract the values for genre, we run into a problem. Some movies fall into multiple genre categories and have therefore more than a single one listed in their `genre` column. There are multiple ways to approach this situation. The easiest option would be to only look at the first value. However, the genres are listed in alphabetical order, with no actual levels of "importance." Thus, ignoring the rest would not be representative of all genres.
 
-In this case, `str_split_i()` can come in handy. The function allows us to split a string into multiple pieces. The names in the `genre` column are separated by a simple comma (`,`), which could serve as our `pattern` parameter. We can split the `genre` string into 3 values, since 3 is the maximum number of genres listed, and instead add them to separate columns `genre_1`, `genre_2`, and `genre_3`.
+In this case, `str_split_i()` can come in handy. The function allows us to split a string into multiple pieces. The names in the `genre` column are separated by a simple comma (`,`), which serves as our `pattern` parameter. We can split the `genre` string into 3 values, since 3 is the maximum number of genres listed, and instead add them to separate columns `genre_1`, `genre_2`, and `genre_3`.
 
 ```{r}
 movies['genre_1'] <- 'NA'
@@ -190,9 +205,9 @@ At this point, we have listed all genres separately, in different columns. Still
 
 ```{r}
 movies <- movies |>
-        pivot_longer(cols = c('genre_1', 'genre_2', 'genre_3'),
-                     names_to = 'genre_labels',
-                     values_to = 'genres')
+  pivot_longer(cols = c('genre_1', 'genre_2', 'genre_3'),
+               names_to = 'genre_labels',
+               values_to = 'genres')
 ```
 
 ```{r}
@@ -203,52 +218,57 @@ Notice here that some rows still contain `N/A` values, since not all movies have
 
 ```{r}
 movies <- movies |>
-      drop_na() |>
-      subset(select = -c(genre_labels))
+  drop_na() |>
+  subset(select = -c(genre_labels))
 ```
 
 We then create a new dataframe to store the different genres and their respective `PASS` and `FAIL` frequencies.
 
 ```{r}
-genres_df <- movies |>
-      group_by(genres) |>
-      count(binary)
+all_genres <- movies |>
+  group_by(genres) |>
+  count(binary)
 ```
 
 ```{r}
-glimpse(genres_df)
+glimpse(all_genres)
 ```
 
-Now that we have isolated our relevant values, we are ready to plot them. In order to make our graph more legible, we use `filter()` to show only some of the most common movie genres: *action*, *adventure*, *comedy*, *crime*, *romance*, *sci-fi*, and *thriller*. We can see, for example, that the only genres in which `PASS` is more frequent than `FAIL` are *comedy* and *romance*. The other selected genres comprise more movies that fail the Bechdel Test, with the disparity being noticeably larger in genres like *action* and *adventure*.
+Now that we have isolated our relevant values, we are ready to plot them. In order to make our graph more legible, we use `filter()` to show only some of the most common movie genres: **action**, **adventure**, **comedy**, **crime**, **romance**, **sci-fi**, and **thriller**. We can see, for example, that the only genres in which `PASS` is more frequent than `FAIL` are **comedy** and **romance**. The other selected genres are represented in its majority by more movies that fail the Bechdel Test, with the disparity being noticeably larger in genres like **action** and **adventure**.
 
 ```{r}
-genres_df |>
-    filter(genres %in% c("Action", "Adventure",
-                    "Comedy", "Crime", "Romance",
-                    "Sci-Fi", "Thriller")) |>
-    ggplot(aes(fill = binary, x = genres, y = n)) +
-      geom_bar(position = "dodge", stat = "identity")
+all_genres |>
+  filter(genres %in% c("Action", "Adventure",
+                       "Comedy", "Crime", "Romance",
+                       "Sci-Fi", "Thriller")) |>
+  ggplot(aes(fill = binary, x = genres, y = n)) +
+    geom_bar(position = "dodge", stat = "identity", width = 0.7) +
+    scale_fill_manual(values=c("red2", "green2")) +
+    labs(title = "PASS/FAIL Trends by Movie Genre",
+       x = "Genre",
+       y = "Frequency")
+    
 ```
 
 ## Joining Datasets
 
-As we have seen before with the existence of a `dubious` label, the Bechdel Test is not always a consensus between viewers. That is because they might have different notions of what it means for a movie to have a woman with a significant enough role to be factored into the Test, or there might be nuances to a conversation between women that viewers may or may not classify as "about a a man." In order to explore this variation even further, we will import `raw_bechdel.csv`, a different dataset (sourced via the `bechdeltest.com` API) that includes some information about movies from 1970 to 2020. 
+As we have seen before with the existence of a `dubious` label, the Bechdel Test is not always a consensus between viewers. That is because they might have different notions of what it means for a movie to have a woman with a significant enough role to be factored into the Test, or there might be nuances to a conversation between women that viewers may or may not classify as "about a a man." In order to explore this variation even further, we will import `raw_bechdel.csv`, a different dataset (sourced via the [Bechdel Test API](bechdeltest.com)) that includes information about movies from 1970 to 2020. 
 
 ```{r}
 raw_bechdel <- read.csv("raw_bechdel.csv")
 ```
 
-For the sake of simplicity, let's assume that rows where the `title` and `year` variables are the same in both dataframes refer to the same movie. We can join both dataframes by `title` with `left_join()`, then select the row duplicates that have the same `year`.
+For the sake of simplicity, let's assume that rows where the `title` and `year` variables are the same in both datasets refer to the same movie. We can join the dataframes by `title` with `left_join()`, then select the row duplicates that have the same `year`.
 
 ```{r}
 #| warning: false
 joined <- movies |>
-    left_join(raw_bechdel, by = "title") |>
-    filter(year.x == year.y) |>
-    rename("year" = `year.x`)
+  left_join(raw_bechdel, by = "title") |>
+  filter(year.x == year.y) |>
+  rename("year" = `year.x`)
 ```
 
-Using the `sum()` function, we observe that the ratings given to overlapping movies in both datasets are the same in `3184` occasions. In contrast, they are not the same in `455` occasions, `444` of them being cases where the rating in `raw_bechdel` is greater than that in `movies`.
+Using the `sum()` function, we observe that the ratings given to overlapping movies in both datasets are the same in 3184 occasions. In contrast, they are not the same in 455 occasions, 444 of them being cases where the rating in `raw_bechdel` is greater than that in `movies`.
 
 ```{r}
 sum(joined$rating.x == joined$rating.y)
@@ -257,55 +277,207 @@ sum(joined$rating.x < joined$rating.y)
 sum(joined$rating.x > joined$rating.y)
 ```
 
-# Keywords (with NLP tokenization)
+# Keywords (with NLP)
 
-This next section utilizes the `udpipe` package, an open-source tool for Natural Language Processing, including tokenization, raw text parsing, and tagging.
+## `udpipe`
+
+This next section utilizes the `udpipe` package, an open-source tool for Natural Language Processing, including tokenization, raw text parsing, and tagging. A complete documentation can be found [here](https://bnosac.github.io/udpipe/docs/doc0.html). We are interested in investigating whether some keywords are more frequent than others in movies that pass or fail the Bechdel Test.
 
 ```{r}
-#| eval: false
-library(lattice)
+#| warning: false
 library(udpipe)
 ```
 
 ```{r}
-#| eval: false
-udmodel <- udpipe_load_model(file = 'english-ewt-ud-2.5-191206.udpipe')
-s <- udpipe_annotate(udmodel, movies$plot)
-x <- data.frame(s)
-stats <- txt_freq(x$upos)
-stats$key <- factor(stats$key, levels = rev(stats$key))
+#| warning: false
+udmodel <- udpipe_download_model(language = "english")
+udmodel <- udpipe_load_model(file = udmodel$file_model)
+plots <- udpipe_annotate(udmodel, movies$plot)
+plots <- data.frame(plots)
+```
+```{r}
+glimpse(plots)
+```
+
+## Morphological Features
+
+Here, some variables might be of interest when dealing with the linguistic aspect of plot descriptions. For example, the `upos` tag represents the universal part-of-speech label of a single word, or the abstract lexical category associated with it, such as `ADJ`, `NOUN`, or `VERB`. We can use the `txt_freq()` function to compute the most occurring categories in plot descriptions for the entire dataset.
+
+```{r}
+upos_freq <- txt_freq(plots$upos)
+upos_freq$key <- as.factor(upos_freq$key)
 ```
 
 ```{r}
-#| eval: false
-## NOUNS
-stats <- subset(x, upos %in% c("NOUN")) 
-stats <- txt_freq(stats$token)
-stats$key <- factor(stats$key, levels = rev(stats$key))
-barchart(key ~ freq, data = head(stats, 20), col = "cadetblue", 
-         main = "Most occurring nouns", xlab = "Freq")
+glimpse(upos_freq)
+```
+Another important tag is `lemma`, which contains the canonical (base) form of the word, or the form typically found in dictionaries. This helps us to "normalize" words with similar semantic contents into a single form. Once we understand what these tags represent, we can then them to explore certain trends in the occurrence of specific word types. For instance, we can compute and plot the most frequent nouns in plot descriptions of movies that failed or passed the Bechdel Test, represented by our `bechdel_fail` and `bechdel_pass` dataframes, respectively.
+
+```{r}
+plots_fail <- udpipe_annotate(udmodel, bechdel_fail$plot)
+plots_fail <- data.frame(plots_fail)
 ```
 
 ```{r}
-#| eval: false
-## Using RAKE
-stats <- keywords_rake(x = x, term = "lemma", group = "doc_id", 
-                       relevant = x$upos %in% c("NOUN", "ADJ"))
-stats$key <- factor(stats$keyword, levels = rev(stats$keyword))
-barchart(key ~ rake, data = head(subset(stats, freq > 3), 20), col = "red", 
-         main = "Keywords identified by RAKE", 
-         xlab = "Rake")
+nouns_fail <- subset(plots_fail, upos %in% c("NOUN")) 
+nouns_fail <- txt_freq(nouns_fail$lemma)
+nouns_fail$key <- as.factor(nouns_fail$key)
 ```
 
 ```{r}
-#| eval: false
-## Using a sequence of POS tags (noun phrases / verb phrases)
-x$phrase_tag <- as_phrasemachine(x$upos, type = "upos")
-stats <- keywords_phrases(x = x$phrase_tag, term = tolower(x$token), 
+glimpse(nouns_fail)
+```
+
+```{r}
+plots_pass <- udpipe_annotate(udmodel, bechdel_pass$plot)
+plots_pass <- data.frame(plots_pass)
+```
+
+```{r}
+nouns_pass <- subset(plots_pass, upos %in% c("NOUN")) 
+nouns_pass <- txt_freq(nouns_pass$lemma)
+nouns_pass$key <- as.factor(nouns_pass$key)
+```
+
+```{r}
+glimpse(nouns_pass)
+```
+
+We plot the noun frequencies for each case with `ggplot()`. The function `grid.arrange()` from the `gridExtra` package can be used to arrange them side by side.
+
+```{r}
+ggp1 <- nouns_fail |>
+  head(20) |>
+  ggplot(aes(x = reorder(key, freq), y = freq)) +
+    geom_bar(stat = "identity", fill = "turquoise3", width = 0.7) +
+    coord_flip() +
+    labs(title = "FAIL - Nouns",
+       x = "Noun",
+       y = "Frequency")
+```
+
+```{r}
+ggp2 <- nouns_pass |>
+  head(20) |>
+  ggplot(aes(x = reorder(key, freq), y = freq)) +
+    geom_bar(stat = "identity", fill = "orange2", width = 0.7) +
+    coord_flip() +
+    labs(title = "PASS - Nouns",
+       x = "Noun",
+       y = "Frequency")
+
+```
+
+```{r}
+grid.arrange(ggp1, ggp2, ncol = 2)
+```
+
+## Keyword Extraction
+
+While these two plots already reveal some interesting patters in the groups of nouns that appear most frequently in `PASS` and `FAIL` movies, a noun without surrounding context might not be enough to draw any concrete conclusions. This is where RAKE comes in. [RAKE (Rapid Automatic Keyword Extraction)](https://csurfer.github.io/rake-nltk/_build/html/index.html) is an efficient unsupervised Machine Learning algorithm for keyword extraction. It is rooted in the notion that keywords often contain multiple words and very few words with minimum lexical meaning, such as standard punctuation or stop words. The algorithm recognizes word frequencies and relative degrees, using that information to ultimately identify content words, as well as key phrases.
+
+The next code chunk executes a sample keyword extraction with `keywords_rake()` for the entire `movies` dataset and plots the 30 most frequent keywords in a flipped bar chart.
+
+```{r}
+keywords <- keywords_rake(x = plots, term = "lemma", group = "doc_id", 
+                          relevant = plots$upos %in% c("NOUN", "ADJ"))
+
+keywords$key <- as.factor(keywords$keyword)
+```
+
+```{r}
+keywords |>
+  head(30) |>
+  ggplot(aes(x = reorder(key, rake), y = rake)) +
+    geom_bar(stat = "identity", fill = "mediumpurple", width = 0.7) +
+    coord_flip() +
+    labs(title = "Most Frequent Keywords",
+       x = "Keyword",
+       y = "Frequency")
+```
+
+The function `as_phrasemachine()` coverts `upos` labels to one-letter tags (i.e. A for adjectives), which can then be combined into POS sequences. This allows noun phrases, for example, to be identified by the regex `(A|N)*N(P+D*(A|N)*N)*`.
+
+```{r}
+plots["phrase_tag"] <- as_phrasemachine(plots$upos, type = "upos")
+```
+
+We then can plot the most frequent noun phrases out of the `movies` plot keywords.
+
+```{r}
+noun_phrases <- keywords_phrases(x = plots$phrase_tag, term = tolower(plots$token), 
                           pattern = "(A|N)*N(P+D*(A|N)*N)*", 
                           is_regex = TRUE, detailed = FALSE)
-stats <- subset(stats, ngram > 1 & freq > 3)
-stats$key <- factor(stats$keyword, levels = rev(stats$keyword))
-barchart(key ~ freq, data = head(stats, 20), col = "magenta", 
-         main = "Keywords - simple noun phrases", xlab = "Frequency")
+
+noun_phrases <- subset(noun_phrases, ngram > 1 & freq > 3)
+noun_phrases$key <- as.factor(noun_phrases$keyword)
 ```
+
+```{r}
+noun_phrases |>
+  head(20) |>
+  ggplot(aes(x = reorder(key, freq), y = freq)) +
+    geom_bar(stat = "identity", fill = "seagreen", width = 0.7) +
+    coord_flip() +
+    labs(title = "Most Frequent NP Keywords",
+       x = "NP Keyword",
+       y = "Frequency")
+```
+
+Similarly to what was done before for nouns, we can plot two different graphs for `PASS` and `FAIL` side-by-side, this time with the most frequent noun phrases.
+
+```{r}
+plots_fail["phrase_tag"] <- as_phrasemachine(plots_fail$upos, type = "upos")
+```
+
+```{r}
+noun_phrases_fail <- keywords_phrases(x = plots_fail$phrase_tag, term = tolower(plots_fail$token), 
+                          pattern = "(A|N)*N(P+D*(A|N)*N)*", 
+                          is_regex = TRUE, detailed = FALSE)
+
+noun_phrases_fail <- subset(noun_phrases_fail, ngram > 1 & freq > 3)
+noun_phrases_fail$key <- as.factor(noun_phrases_fail$keyword)
+```
+
+```{r}
+ggp1 <- noun_phrases_fail |>
+  head(30) |>
+  ggplot(aes(x = reorder(key, freq), y = freq)) +
+    geom_bar(stat = "identity", fill = "turquoise", width = 0.7) +
+    coord_flip() +
+    labs(title = "FAIL - NP Keywords",
+       x = "NP Keyword",
+       y = "Frequency")
+```
+
+```{r}
+plots_pass["phrase_tag"] <- as_phrasemachine(plots_pass$upos, type = "upos")
+```
+
+```{r}
+noun_phrases_pass <- keywords_phrases(x = plots_pass$phrase_tag, term = tolower(plots_pass$token), 
+                          pattern = "(A|N)*N(P+D*(A|N)*N)*", 
+                          is_regex = TRUE, detailed = FALSE)
+
+noun_phrases_pass <- subset(noun_phrases_pass, ngram > 1 & freq > 3)
+noun_phrases_pass$key <- as.factor(noun_phrases_pass$keyword)
+```
+
+```{r}
+ggp2 <- noun_phrases_pass |>
+  head(30) |>
+  ggplot(aes(x = reorder(key, freq), y = freq)) +
+    geom_bar(stat = "identity", fill = "orange2", width = 0.7) +
+    coord_flip() +
+    labs(title = "PASS - NP Keywords",
+       x = "NP Keyword",
+       y = "Frequency")
+```
+
+```{r}
+grid.arrange(ggp1, ggp2, ncol = 2)
+```
+
+# Conclusion
+
+Overall, there are numerous different ways in which the `movies` dataset can be further explored, but the generated plots uncover some interesting correlations. For instance, plot descriptions of movies that fail the Bechdel Test often include key phrases that start with the possessive pronoun "his," along with phrases like "world war", "serial killer," "fbi agent," and "alien race," which relate to themes commonly associated with men and masculinity. In contrast, the most frequent keyword for movies that pass the Bechdel Test is "young woman" (after "new york"), followed by terms such as "high school," "small town," and "best friend." These findings are also consistent with those from the the "PASS/FAIL Trends by Movie Genre" graph shown earlier.
